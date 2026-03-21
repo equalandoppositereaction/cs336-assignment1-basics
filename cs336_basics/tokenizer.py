@@ -1,0 +1,51 @@
+'''
+This file was made to directly run on a virtual machine
+'''
+
+
+
+from datasets import load_dataset
+
+dataset = load_dataset(
+    "HuggingFaceFW/fineweb-edu",
+    name="sample-10BT",
+    split="train"
+)
+
+import sentencepiece as spm
+import os
+
+model_prefix = "fwedu32k"
+vocab_size = 40000
+model_type = "bpe"
+
+#Adds eos token at the end of every row
+def text_iterator(dataset):
+    for i, row in enumerate(dataset):
+        combined_text = row["text"] + "<|endoftext|>"
+        yield combined_text
+
+spm.SentencePieceTrainer.Train(
+    sentence_iterator=text_iterator(dataset["train"]),
+    model_prefix=model_prefix,
+    vocab_size=vocab_size,
+    model_type=model_type,
+    character_coverage=0.9999,
+    byte_fallback=True,
+    split_by_unicode_script=True,
+    split_by_number=True,
+    pad_piece='<pad>',
+    unk_piece='<unk>',
+    eos_piece='<|endoftext|>',
+    user_defined_symbols=["'s", "'t", "'re", "'ve", "'m", "'ll", "'d"],     #tried to replicate the regex line fropm gpt4
+    remove_extra_whitespaces=False,
+    max_sentence_length=100000,
+    train_extremely_large_corpus=True,
+    input_sentence_size=2000000,       #Samples 2 million lines
+    shuffle_input_sentence=True,
+    num_threads=16                      #config of the VM
+    )
+
+print(f"Model and vocab saved as {model_prefix}.model and {model_prefix}.vocab")
+
+
