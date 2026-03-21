@@ -30,7 +30,7 @@ spm.SentencePieceTrainer.Train(
     model_prefix=model_prefix,
     vocab_size=vocab_size,
     model_type=model_type,
-    character_coverage=0.9999,
+    character_coverage=0.9999, #the default 0.995 would have been better 
     byte_fallback=True,
     split_by_unicode_script=True,
     split_by_number=True,
