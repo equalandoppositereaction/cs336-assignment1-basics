@@ -16,7 +16,7 @@ import sentencepiece as spm
 import os
 
 model_prefix = "fwedu32k"
-vocab_size = 40000
+vocab_size = 40257
 model_type = "bpe"
 
 #Adds eos token at the end of every row
@@ -30,7 +30,7 @@ spm.SentencePieceTrainer.Train(
     model_prefix=model_prefix,
     vocab_size=vocab_size,
     model_type=model_type,
-    character_coverage=0.9999, #the default 0.995 would have been better 
+    character_coverage=0.995, #the default 0.995 would have been better 
     byte_fallback=True,
     split_by_unicode_script=True,
     split_by_number=True,
@@ -39,9 +39,9 @@ spm.SentencePieceTrainer.Train(
     eos_piece='<|endoftext|>',
     user_defined_symbols=["'s", "'t", "'re", "'ve", "'m", "'ll", "'d"],     #tried to replicate the regex line fropm gpt4
     remove_extra_whitespaces=False,
-    max_sentence_length=1000000,
+    max_sentence_length=800000,
     train_extremely_large_corpus=True,
-    input_sentence_size=2500000,       #Samples 2 million lines
+    input_sentence_size=2000000,       #Samples 2 million lines
     shuffle_input_sentence=True,
     num_threads=16                      #config of the VM
     )
