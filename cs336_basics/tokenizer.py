@@ -1,51 +1,83 @@
 '''
-This file was made to directly run on a virtual machine
+
+Tokenizer inference, taken from llama 2
 '''
 
 
-
-from datasets import load_dataset
-
-dataset = load_dataset(
-    "HuggingFaceFW/fineweb-edu",
-    name="sample-10BT",
-    split="train"
-)
-
-import sentencepiece as spm
 import os
+import struct
+import argparse
+from typing import List
 
-model_prefix = "fwedu32k"
-vocab_size = 40257
-model_type = "bpe"
+from sentencepiece import SentencePieceProcessor
 
-#Adds eos token at the end of every row
-def text_iterator(dataset):
-    for i, row in enumerate(dataset):
-        combined_text = row["text"] + "<|endoftext|>"
-        yield combined_text
+TOKENIZER_MODEL = "tokenizer.model" # the sentencepiece tokenizer model
 
-spm.SentencePieceTrainer.Train(
-    sentence_iterator=text_iterator(dataset),
-    model_prefix=model_prefix,
-    vocab_size=vocab_size,
-    model_type=model_type,
-    character_coverage=0.995, #the default 0.995 would have been better 
-    byte_fallback=True,
-    split_by_unicode_script=True,
-    split_by_number=True,
-    pad_piece='<pad>',
-    unk_piece='<unk>',
-    eos_piece='<|endoftext|>',
-    user_defined_symbols=["'s", "'t", "'re", "'ve", "'m", "'ll", "'d"],     #tried to replicate the regex line fropm gpt4
-    remove_extra_whitespaces=False,
-    max_sentence_length=800000,
-    train_extremely_large_corpus=True,
-    input_sentence_size=2000000,       #Samples 2 million lines
-    shuffle_input_sentence=True,
-    num_threads=16                      #config of the VM
-    )
+class Tokenizer:
+    def __init__(self, max_len=None, tokenizer_model=None):
+        model_path = tokenizer_model if tokenizer_model else TOKENIZER_MODEL
+        assert os.path.isfile(model_path), model_path
+        self.sp_model = SentencePieceProcessor(model_file=model_path)
+        self.model_path = model_path
+        self.max_len = max_len
 
-print(f"Model and vocab saved as {model_prefix}.model and {model_prefix}.vocab")
+        self.n_words: int = self.sp_model.vocab_size()
+        self.bos_id: int = self.sp_model.bos_id()
+        self.eos_id: int = self.sp_model.eos_id()
+        # Overwrite the default of pad_id=-1, which is problematic.
+        self.pad_id: int = self.sp_model.piece_to_id("<0x00>")
+        #print(f"#words: {self.n_words} - BOS ID: {self.bos_id} - EOS ID: {self.eos_id}")
+        assert self.sp_model.vocab_size() == self.sp_model.get_piece_size()
 
+    def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
+        assert type(s) is str
+        t = self.sp_model.encode(s)
+        if self.max_len is not None and len(t) > self.max_len:
+            t = t[:self.max_len]
+        if bos:
+            t = [self.bos_id] + t
+        if eos:
+            t = t + [self.eos_id]
+        return t
 
+    def decode(self, t: List[int]) -> str:
+        return self.sp_model.decode(t)
+
+    def export(self):
+
+        # get all the tokens (postprocessed) and their scores as floats
+        tokens, scores = [], []
+        for i in range(self.n_words):
+
+            # decode the token and light postprocessing
+            t = self.sp_model.id_to_piece(i)
+            s = self.sp_model.get_score(i)
+            if i == self.bos_id:
+                t = '\n<s>\n'
+            elif i == self.eos_id:
+                t = '\n</s>\n'
+            t = t.replace('▁', ' ') # sentencepiece uses this character as whitespace
+            b = t.encode('utf-8') # bytes of this token, utf-8 encoded
+
+            tokens.append(b)
+            scores.append(s)
+
+        # record the max token length
+        max_token_length = max(len(t) for t in tokens)
+
+        # write to a binary file
+        # the tokenizer.bin file is the same as .model file, but .bin
+        tokenizer_bin = self.model_path.replace('.model', '.bin')
+        with open(tokenizer_bin, 'wb') as f:
+            f.write(struct.pack("I", max_token_length))
+            for bytes, score in zip(tokens, scores):
+                f.write(struct.pack("fI", score, len(bytes)))
+                f.write(bytes)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--tokenizer-model", type=str, help="optional path to custom tokenizer ")
+    args = parser.parse_args()
+
+    t = Tokenizer(args.tokenizer_model)
+    t.export()
