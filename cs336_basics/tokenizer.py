@@ -26,7 +26,7 @@ def text_iterator(dataset):
         yield combined_text
 
 spm.SentencePieceTrainer.Train(
-    sentence_iterator=text_iterator(dataset["train"]),
+    sentence_iterator=text_iterator(dataset),
     model_prefix=model_prefix,
     vocab_size=vocab_size,
     model_type=model_type,
@@ -39,9 +39,9 @@ spm.SentencePieceTrainer.Train(
     eos_piece='<|endoftext|>',
     user_defined_symbols=["'s", "'t", "'re", "'ve", "'m", "'ll", "'d"],     #tried to replicate the regex line fropm gpt4
     remove_extra_whitespaces=False,
-    max_sentence_length=100000,
+    max_sentence_length=1000000,
     train_extremely_large_corpus=True,
-    input_sentence_size=2000000,       #Samples 2 million lines
+    input_sentence_size=2500000,       #Samples 2 million lines
     shuffle_input_sentence=True,
     num_threads=16                      #config of the VM
     )
